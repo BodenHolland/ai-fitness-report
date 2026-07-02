@@ -155,7 +155,7 @@ Then in Claude Code:
 
 > "Generate my AI fitness report."
 
-Claude will `cd` to this repo, extract your prompts, classify them in-context (no external API), write them to the local cache, and generate the report. Uses your existing Claude Code subscription; nothing leaves your machine → Anthropic trust boundary.
+Claude will `cd` to this repo, extract your prompts, classify them in-context (no external API), write them to the local cache, and generate an HTML report opened in your default browser. Uses your existing Claude Code subscription; nothing leaves your machine → Anthropic trust boundary.
 
 ### B) Headless via OpenRouter
 
@@ -163,13 +163,19 @@ Unattended — good for full-archive one-shots, but the default free-tier model 
 
 ```bash
 export OPENROUTER_API_KEY=sk-or-...
-node --experimental-strip-types audit.ts --sample 5    # test on 5 recent sessions
-node --experimental-strip-types audit.ts               # full archive
+node --experimental-strip-types audit.ts --sample 5 --out ai-fitness-report.html
+node --experimental-strip-types audit.ts --out ai-fitness-report.html    # full archive
 ```
 
-Flags: `--sample N`, `--dump` (write prompts file for external classifier), `--report` (regenerate report from cache, no API), `--dry` (heuristics only), `--out PATH`, `--concurrency N`, `--model NAME`.
+Flags: `--sample N`, `--dump` (write prompts file for external classifier), `--report` (regenerate report from cache, no API), `--dry` (heuristics only), `--out PATH` (`.html` for HTML, `.md` for markdown), `--concurrency N`, `--model NAME`.
 
-Classifications are cached in `.ai-fitness-cache.json` so re-runs are free. The report is a mirror — descriptive, not prescriptive; there is no evidence-based "healthy distribution."
+Classifications are cached in `.ai-fitness-cache.json` so re-runs are free.
+
+### What the report contains
+
+Leads with two evaluative sections — **Impression** (3–5 observations applying specific Tier-A findings to your pattern, each with a confidence tag and a linked citation) and **Moments** (the 10 most-recent skill-building / expert-decision prompts, with the top 2 shown as full before/after cards including a copy-paste "Try instead" reframe). Everything descriptive — regime mix, activity heatmap, session stats, project deep dives, topics, stakes, chronic offload domains, narrative summary — sits below.
+
+**Framing discipline.** The report applies specific findings to your pattern; it does not compare you against a benchmark of "healthy AI use." No such benchmark exists in the evidence. Every observation carries a confidence tag (Strong / Plausible / Speculative) so overclaims are visible.
 
 ---
 

@@ -6,6 +6,10 @@ node_modules/
 .cultivation-audit-*.tsv
 .classify-overrides.json
 ai-fitness-report.md
+ai-fitness-report.html
 cultivation-audit-report.md
 audit-*.md
+audit-*.html
 sample-report.md
+sample-report.html
+.claude/

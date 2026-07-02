@@ -92,13 +92,28 @@ is an append-only cache keyed by content hash.
 
 ## Step 4 — generate the report
 
+Default to the HTML output — it's the intended reading experience. The script
+picks format from the `--out` extension.
+
 ```bash
-node --experimental-strip-types audit.ts --report [--sample N]
+node --experimental-strip-types audit.ts --report --out ai-fitness-report.html [--sample N]
 ```
 
-(Pass the same `--sample` value used in Step 1.) This writes
-`ai-fitness-report.md` using the cached classifications with zero API
-calls.
+(Pass the same `--sample` value used in Step 1.) This uses the cached
+classifications with zero API calls. Open the file with `open ai-fitness-report.html`
+after generation.
+
+The HTML report leads with two evaluative sections — **Impression** (3–5
+observations tied to specific Tier-A findings with confidence tags) and
+**Moments** (10 most-recent skill-building / expert-decision prompts, with the
+top 2 shown as full before/after cards including a copy-paste "Try instead"
+reframe). Every claim links the actual paper it operationalizes (Bastani PNAS
+2025, Dratsch Radiology 2023, Parasuraman & Manzey Human Factors 2010). All
+the descriptive summaries — mix, activity, sessions, projects, deep dives,
+topics, stakes, chronic offload — sit below.
+
+If the user asks for markdown instead (e.g. for a diff, an issue, or a
+non-browser context), use `--out ai-fitness-report.md`.
 
 ## Step 5 — show the user
 
