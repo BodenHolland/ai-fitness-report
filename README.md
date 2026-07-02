@@ -82,7 +82,7 @@ findings above.
 | File | What it is |
 |---|---|
 | [`cultivation.ts`](./cultivation.ts) | **The product router.** Server-side code for an app's backend: classify each request into a regime and return the matching system prompt before calling the model. Provider-agnostic (OpenRouter-compatible `/chat/completions`). |
-| [`SKILL.md`](./SKILL.md) | **The behavioral skill.** The same discipline as a portable instruction set — usable as a Claude/Agent Skill or pasted into any model as a system prompt to change how it talks to *you*. |
+| [`skills/cultivation-mode/SKILL.md`](./skills/cultivation-mode/SKILL.md) | **The behavioral skill.** The same discipline as a portable instruction set — installable as a Claude/Agent Skill, or pasted into any model as a system prompt to change how it talks to *you*. |
 
 **Two different jobs:** the skill changes how a model talks to *you* in a chat;
 the router changes how *your app's* AI talks to *your users*, automatically.
@@ -111,6 +111,28 @@ Design notes baked in:
   out instantly.
 - **Fail open.** Any classifier error routes to offload. The failure mode is never
   "silently withhold."
+
+---
+
+## Installing the skill
+
+The skill ships in installable form at
+[`skills/cultivation-mode/SKILL.md`](./skills/cultivation-mode/SKILL.md).
+
+```bash
+# Claude Code — personal (available in every project)
+mkdir -p ~/.claude/skills/cultivation-mode
+cp skills/cultivation-mode/SKILL.md ~/.claude/skills/cultivation-mode/
+
+# or per-project
+mkdir -p .claude/skills/cultivation-mode
+cp skills/cultivation-mode/SKILL.md .claude/skills/cultivation-mode/
+```
+
+Then invoke it by name (or let it auto-trigger on a relevant request); it stays
+active for the rest of that conversation. In any other tool, paste the body of
+`SKILL.md` (everything below the frontmatter) as a system prompt / custom
+instruction.
 
 ---
 
