@@ -41,7 +41,8 @@ interface Prompt {
   content: string
 }
 
-interface Classification { regime: Regime; topic: string; stakes: 'low' | 'high' }
+type Familiarity = 'familiar' | 'learning' | 'unclear'
+interface Classification { regime: Regime; topic: string; stakes: 'low' | 'high'; familiarity?: Familiarity }
 
 // ---------------------------------------------------------------------------
 // CLI
@@ -127,12 +128,18 @@ function heuristic(text: string): Classification | null {
   return null
 }
 
-const CLASSIFIER_SYSTEM = `Classify the user's request. Return strict JSON: {"regime": "skill_building"|"expert_decision"|"offload", "topic": "short-kebab-topic", "stakes": "low"|"high"}.
-- "skill_building": user is trying to learn or get better at something they'll later do without AI ("help me understand", "teach me", "I'm learning", homework, practicing craft).
-- "expert_decision": already-competent user making a consequential, checkable judgement where over-trusting the AI is the risk ("review this", "is this right", "should I", "check my", high stakes).
-- "offload": no learning goal, nothing rides on being wrong — drafting/formatting/translating/summarizing/lookups/boilerplate/throughput. DEFAULT when unsure and low stakes.
-"topic": one short tag identifying the domain, e.g. "sql", "react-ui", "career-decision", "email-draft".
-"stakes": "high" only when a wrong answer causes real, hard-to-reverse harm.`
+const CLASSIFIER_SYSTEM = `Classify the user's request. Return strict JSON: {"regime": "skill_building"|"expert_decision"|"offload", "topic": "short-kebab-topic", "stakes": "low"|"high", "familiarity": "familiar"|"learning"|"unclear"}.
+- "regime":
+  - "skill_building": user is trying to learn or get better at something they'll later do without AI ("help me understand", "teach me", "I'm learning", homework, practicing craft).
+  - "expert_decision": already-competent user making a consequential, checkable judgement where over-trusting the AI is the risk ("review this", "is this right", "should I", "check my", high stakes).
+  - "offload": no learning goal, nothing rides on being wrong — drafting/formatting/translating/summarizing/lookups/boilerplate/throughput. DEFAULT when unsure and low stakes.
+- "topic": one short tag identifying the domain, e.g. "sql", "react-ui", "career-decision", "email-draft".
+- "stakes": "high" only when a wrong answer causes real, hard-to-reverse harm.
+- "familiarity" — signals whether the user seems to KNOW this domain, independent of what they're asking:
+  - "familiar": uses domain jargon correctly, directs implementation, edits/reviews existing work, references specifics ("in the useState hook", "the FK constraint on user_id"). Even if they're offloading, they clearly know the field.
+  - "learning": signals not-knowing ("how do I", "what's the difference between", "why does", "I've never", "no idea how", "not sure how", first-time framing, asks for explanation rather than execution).
+  - "unclear": can't tell from the prompt (very short, just a paste, acknowledgement).
+This is descriptive, not prescriptive — don't judge whether they SHOULD know the domain. Just describe what the prompt shows.`
 
 async function llmClassify(text: string): Promise<Classification> {
   const body = {
@@ -152,7 +159,8 @@ async function llmClassify(text: string): Promise<Classification> {
   const data = await res.json() as any
   const parsed = JSON.parse(data.choices[0].message.content)
   const regime: Regime = (['skill_building', 'expert_decision', 'offload'] as const).includes(parsed.regime) ? parsed.regime : 'offload'
-  return { regime, topic: String(parsed.topic || 'unknown').toLowerCase(), stakes: parsed.stakes === 'high' ? 'high' : 'low' }
+  const familiarity: Familiarity = (['familiar', 'learning', 'unclear'] as const).includes(parsed.familiarity) ? parsed.familiarity : 'unclear'
+  return { regime, topic: String(parsed.topic || 'unknown').toLowerCase(), stakes: parsed.stakes === 'high' ? 'high' : 'low', familiarity }
 }
 
 // ---------------------------------------------------------------------------
@@ -287,6 +295,57 @@ function buildReport(rows: (Prompt & Classification)[]): string {
     lines.push(`- **[${m.regime.replace('_', ' ')}]** \`${m.project}\` — "${snippet}${m.content.length > 140 ? '…' : ''}"`)
   }
   lines.push('')
+
+  // Chronic offload domains: topics where you've offloaded repeatedly WHILE signaling
+  // unfamiliarity with the domain. Not verdicts — candidates for reflection.
+  // Filters: ≥5 offloads, ≥2 distinct weeks, learning-share ≥ 30% of the classified subset.
+  const weekOf = (ts: string) => {
+    const d = new Date(ts); if (isNaN(d.getTime())) return ''
+    // ISO week bucket, cheap approximation: yyyy-Www
+    const day = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+    const dayNum = day.getUTCDay() || 7
+    day.setUTCDate(day.getUTCDate() + 4 - dayNum)
+    const yearStart = new Date(Date.UTC(day.getUTCFullYear(), 0, 1))
+    const wk = Math.ceil((((day.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+    return `${day.getUTCFullYear()}-W${String(wk).padStart(2, '0')}`
+  }
+  type Chronic = { topic: string; offloads: number; learning: number; familiar: number; unclear: number; weeks: Set<string>; withSignal: number }
+  const byTopic = new Map<string, Chronic>()
+  for (const r of rows) {
+    if (r.regime !== 'offload' || !r.topic || ['unknown', 'unclassified', 'error', 'trivial', 'system-message', 'slash-command', 'opt-out', 'ack', 'pasted-log', 'agent-notification'].includes(r.topic)) continue
+    if (!byTopic.has(r.topic)) byTopic.set(r.topic, { topic: r.topic, offloads: 0, learning: 0, familiar: 0, unclear: 0, weeks: new Set(), withSignal: 0 })
+    const c = byTopic.get(r.topic)!
+    c.offloads++
+    if (r.familiarity === 'learning') { c.learning++; c.withSignal++ }
+    else if (r.familiarity === 'familiar') { c.familiar++; c.withSignal++ }
+    else if (r.familiarity === 'unclear') { c.unclear++ }
+    const w = weekOf(r.timestamp); if (w) c.weeks.add(w)
+  }
+  const chronic = [...byTopic.values()]
+    .filter(c => c.offloads >= 5 && c.weeks.size >= 2 && c.withSignal >= 3 && (c.learning / Math.max(c.withSignal, 1)) >= 0.3)
+    .sort((a, b) => (b.learning / Math.max(b.withSignal, 1)) - (a.learning / Math.max(a.withSignal, 1)))
+    .slice(0, 12)
+
+  const withFamiliarity = rows.filter(r => r.familiarity && r.familiarity !== 'unclear').length
+  lines.push('## Chronic offload domains')
+  lines.push('')
+  if (withFamiliarity < 20) {
+    lines.push(`_Based on ${withFamiliarity} prompts with a clear familiarity signal. Re-run after more prompts are classified with the new signal to make this section meaningful._`)
+    lines.push('')
+  } else if (!chronic.length) {
+    lines.push(`_Based on ${withFamiliarity} classified prompts, no topics met the threshold (≥5 offloads across ≥2 weeks with ≥30% learning-signal). Either you're offloading things you already know, or the domains vary too much to chronic-ize._`)
+    lines.push('')
+  } else {
+    lines.push(`Topics you've offloaded repeatedly while signaling unfamiliarity with the domain. **Not verdicts — candidates for reflection.** If a topic here is something you'd rather own, that's where cultivation-mode would apply next time. If not, offload is a legitimate mode.`)
+    lines.push('')
+    lines.push('| Topic | Offloads | Learning share | Weeks span |')
+    lines.push('|---|---:|---:|---:|')
+    for (const c of chronic) {
+      const share = c.withSignal ? Math.round((c.learning / c.withSignal) * 100) : 0
+      lines.push(`| ${c.topic} | ${c.offloads} | ${share}% (${c.learning}/${c.withSignal}) | ${c.weeks.size} |`)
+    }
+    lines.push('')
+  }
 
   lines.push('## What to actually do with this')
   lines.push('')

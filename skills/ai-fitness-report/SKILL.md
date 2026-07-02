@@ -55,17 +55,24 @@ For each prompt, decide:
   bug fixes on code you're not trying to learn from, one-offs.
   **This is the default when unsure and stakes are low. Most requests are this.**
 
-Also extract a short kebab-case `topic` (e.g. `sql`, `react-ui`,
-`career-decision`, `email-draft`, `bug-fix`, `deploy`) and `stakes` (`low` by
-default, `high` only when a wrong answer causes real hard-to-reverse harm).
+Also extract:
+
+- A short kebab-case `topic` (e.g. `sql`, `react-ui`, `career-decision`, `email-draft`, `bug-fix`, `deploy`).
+- `stakes`: `low` by default, `high` only when a wrong answer causes real hard-to-reverse harm.
+- `familiarity` — signals whether the user seems to KNOW the domain, independent of regime. This feeds a separate "chronic offload domains" section that shows the user where they've repeatedly leaned on AI in unfamiliar territory.
+  - **`familiar`** — uses jargon correctly, directs implementation, edits/reviews existing work, references specifics ("in the `useState` hook", "the FK constraint on `user_id`"). Even if they're offloading, they clearly know the field.
+  - **`learning`** — signals not-knowing ("how do I", "what's the difference", "why does", "I've never", "no idea how", asks for explanation rather than execution).
+  - **`unclear`** — very short, a paste, an acknowledgement, or genuinely ambiguous. Use this liberally rather than guessing.
+
+`familiarity` is **descriptive, not prescriptive.** Never judge whether the user *should* know the domain — just describe what the prompt shows. The report aggregates this into a "chronic offload domains" section that the user decides what to do with.
 
 **Batching.** Keep batches around 50–100 prompts per turn. For each batch,
 build a JSON object keyed by `hash`:
 
 ```json
 {
-  "7a469c07d1593ca5": {"regime": "expert_decision", "topic": "build-verify", "stakes": "low"},
-  "821c30781937beb1": {"regime": "offload", "topic": "meta-discussion", "stakes": "low"}
+  "7a469c07d1593ca5": {"regime": "expert_decision", "topic": "build-verify", "stakes": "low", "familiarity": "familiar"},
+  "821c30781937beb1": {"regime": "offload", "topic": "meta-discussion", "stakes": "low", "familiarity": "familiar"}
 }
 ```
 
