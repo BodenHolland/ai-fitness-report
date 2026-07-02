@@ -2,5 +2,7 @@ node_modules/
 .DS_Store
 *.log
 .cultivation-audit-cache.json
+.cultivation-audit-prompts.json
 cultivation-audit-report.md
 audit-*.md
+sample-report.md

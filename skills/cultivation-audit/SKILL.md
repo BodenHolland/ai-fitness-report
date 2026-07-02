@@ -1,0 +1,119 @@
+---
+name: cultivation-audit
+description: >-
+  Analyze the user's own Claude Code conversation archive locally, classify
+  every past prompt into a cultivation-mode regime (skill_building /
+  expert_decision / offload), and write a personal report. Uses Claude Code
+  itself for the classification — no external API, nothing leaves the user's
+  machine → Anthropic trust boundary. Trigger when the user asks to audit their
+  AI use, see how they use Claude, run the cultivation audit, understand their
+  own regime distribution, or invokes this skill by name.
+---
+
+# cultivation-audit
+
+Run the local audit on the user's Claude Code archive using in-context
+classification (no OpenRouter, no external API). Drive the `audit.ts` script's
+`--dump` and `--report` modes, doing the classification yourself in between.
+
+## Where to run
+
+The script lives in the `cultivation-mode` repo at `~/Development/cultivation-mode`.
+`cd` there before running any command.
+
+## Step 1 — extract prompts
+
+Ask the user if they want a sample or the full archive. Default to a sample
+(`--sample 5`, ~80 prompts, ~1 batch) unless they say full.
+
+```bash
+cd ~/Development/cultivation-mode
+source ~/.nvm/nvm.sh && nvm use 22
+node --experimental-strip-types audit.ts --dump [--sample N]
+```
+
+That writes `.cultivation-audit-prompts.json` — an array of
+`{hash, project, content}` objects for the uncached prompts.
+
+## Step 2 — classify in-context
+
+Read `.cultivation-audit-prompts.json` and `.cultivation-audit-cache.json` (may
+not exist — that's fine, treat as `{}`).
+
+For each prompt, decide:
+
+- **`skill_building`** — user is trying to learn or get better at something
+  they'll later do without AI ("help me understand," "teach me," "I'm learning,"
+  homework, practicing a craft). *Includes trying to build the mental model for
+  a system, not just copy-paste output.*
+- **`expert_decision`** — an already-competent user making a consequential,
+  checkable judgement where over-trusting the AI is the risk ("review this,"
+  "is this right," "should I," "check my," high stakes).
+- **`offload`** — no learning goal, nothing rides on being wrong. Drafting,
+  formatting, translating, summarizing, lookups, boilerplate, throughput,
+  bug fixes on code you're not trying to learn from, one-offs.
+  **This is the default when unsure and stakes are low. Most requests are this.**
+
+Also extract a short kebab-case `topic` (e.g. `sql`, `react-ui`,
+`career-decision`, `email-draft`, `bug-fix`, `deploy`) and `stakes` (`low` by
+default, `high` only when a wrong answer causes real hard-to-reverse harm).
+
+**Batching.** Keep batches around 50–100 prompts per turn. For each batch,
+build a JSON object keyed by `hash`:
+
+```json
+{
+  "7a469c07d1593ca5": {"regime": "expert_decision", "topic": "build-verify", "stakes": "low"},
+  "821c30781937beb1": {"regime": "offload", "topic": "meta-discussion", "stakes": "low"}
+}
+```
+
+## Step 3 — write classifications to cache
+
+After each batch (or at the end for small runs), merge into
+`.cultivation-audit-cache.json`. Read the existing file (if any), spread it
+plus your new entries, write back. Do not overwrite unrelated entries — this
+is an append-only cache keyed by content hash.
+
+## Step 4 — generate the report
+
+```bash
+node --experimental-strip-types audit.ts --report [--sample N]
+```
+
+(Pass the same `--sample` value used in Step 1.) This writes
+`cultivation-audit-report.md` using the cached classifications with zero API
+calls.
+
+## Step 5 — show the user
+
+Read `cultivation-audit-report.md` and summarize the standout findings in
+chat: their regime mix, the projects that skew skill-building or expert-decision
+(not offload), and 2–3 specific "moments cultivation-mode would have changed"
+examples that stood out. Point them at the full file for the rest. Frame it as
+a mirror, not a benchmark — the report already says this in its own words.
+
+## Honest guardrails
+
+- **Don't invent a benchmark.** There's no evidence-based "healthy distribution."
+  Describe their pattern; don't tell them it's too high or too low.
+- **Don't over-classify as skill_building.** People rarely explicitly want to
+  learn from AI — most of what looks like "understand this" is actually offload
+  (understand this thing enough to use it, then move on). If the user doesn't
+  clearly signal a learning goal AND the task is one they'll later do without
+  AI, it's offload.
+- **Frame the intervention as harm-avoidance, not acceleration.** The strongest
+  claim their report can support is "here are moments where using cultivation-mode
+  would have kept the AI from anchoring your judgment or from offloading
+  effortful work you wanted to own." Never "here's where you would have learned
+  more."
+- **Escape-hatch honesty.** If a prompt contains `just tell me` / `give me the
+  answer` / `stop asking`, that's `offload` regardless of surface topic — the
+  user opted out of any regime.
+
+## If the user asks "should I use the OpenRouter path instead?"
+
+The repo's `audit.ts` also has an OpenRouter path (uses `google/gemini-2.0-flash-exp:free`,
+free tier). Fine for unattended full-archive runs, but that free tier trains on
+prompts. This skill exists so audits stay within the Claude Code trust boundary
+they've already accepted. Recommend the skill by default.

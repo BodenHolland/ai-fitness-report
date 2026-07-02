@@ -1,16 +1,23 @@
 // audit.ts — scan local Claude Code transcripts, classify every user prompt
 // into a cultivation-mode regime, and write a personal report.
 //
-// Run:
-//   OPENROUTER_API_KEY=... node --experimental-strip-types audit.ts
-//   OPENROUTER_API_KEY=... node --experimental-strip-types audit.ts --sample 5 --dry
-//   node --experimental-strip-types audit.ts --dry              # no API calls
+// Two ways to run this:
+//
+// A) Through Claude Code (uses your subscription, no external API, no training):
+//      invoke the `cultivation-audit` skill in a fresh Claude Code chat.
+//      The skill drives this script's --dump and --report modes.
+//
+// B) Headless via OpenRouter (unattended, but hits external API):
+//      OPENROUTER_API_KEY=... node --experimental-strip-types audit.ts
 //
 // Flags:
-//   --sample N       classify only N most-recent sessions (default: all)
-//   --dry            skip API calls; use heuristics only
+//   --sample N       only the N most-recent sessions (default: all)
+//   --dump           extract prompts to .cultivation-audit-prompts.json and exit
+//                    (Claude Code flow — classification happens in the skill)
+//   --report         generate report from cache only; skip all classification
+//   --dry            no API calls; heuristics only (everything else → unclassified)
 //   --out PATH       report path (default: ./cultivation-audit-report.md)
-//   --concurrency N  parallel classifier calls (default: 8)
+//   --concurrency N  parallel classifier calls when using OpenRouter (default: 8)
 //   --model NAME     OpenRouter model (default: google/gemini-2.0-flash-exp:free)
 //
 // The report is descriptive, not prescriptive. There is no evidence-based
@@ -48,10 +55,13 @@ const val = (name: string, d: string) => {
 const OPTS = {
   sample: Number(val('--sample', '0')),
   dry: flag('--dry'),
+  dump: flag('--dump'),
+  report: flag('--report'),
   out: val('--out', 'cultivation-audit-report.md'),
   concurrency: Number(val('--concurrency', '8')),
   model: val('--model', 'google/gemini-2.0-flash-exp:free'),
 }
+const PROMPTS_PATH = '.cultivation-audit-prompts.json'
 const API_KEY = process.env.OPENROUTER_API_KEY
 
 // ---------------------------------------------------------------------------
@@ -149,6 +159,10 @@ async function classify(text: string): Promise<Classification> {
   if (cache[h]) return cache[h]
   const heur = heuristic(text)
   if (heur) { cache[h] = heur; return heur }
+  if (OPTS.report) {
+    // report-only mode: no API, no caching of the fallback (so a later run can classify)
+    return { regime: 'offload', topic: 'unclassified', stakes: 'low' }
+  }
   if (OPTS.dry || !API_KEY) {
     const fallback: Classification = { regime: 'offload', topic: 'unclassified', stakes: 'low' }
     cache[h] = fallback; return fallback
@@ -293,8 +307,22 @@ async function main() {
     void keepSessions
   }
 
-  console.log(`Classifying ${prompts.length} prompts (dry=${OPTS.dry}, concurrency=${OPTS.concurrency})…`)
-  if (!OPTS.dry && !API_KEY) { console.error('OPENROUTER_API_KEY not set — pass --dry to run without the classifier.'); process.exit(1) }
+  // --dump: write UNCACHED prompts to a batch file for the cultivation-audit skill
+  // to classify in-context (uses Claude Code inference, no external API).
+  if (OPTS.dump) {
+    const batch = prompts
+      .filter(p => !heuristic(p.content) && !cache[hashOf(p.content)])
+      .map(p => ({ hash: hashOf(p.content), project: p.project, content: p.content.slice(0, 500) }))
+    writeFileSync(PROMPTS_PATH, JSON.stringify(batch, null, 2))
+    console.log(`Wrote ${batch.length} uncached prompts to ${PROMPTS_PATH}`)
+    console.log(`(${prompts.length - batch.length} were already cached or heuristic-classified)`)
+    console.log(`Next: classify them (via the cultivation-audit skill), then run: node --experimental-strip-types audit.ts --report`)
+    return
+  }
+
+  console.log(`Classifying ${prompts.length} prompts (dry=${OPTS.dry}, report=${OPTS.report}, concurrency=${OPTS.concurrency})…`)
+  const needsApi = !OPTS.dry && !OPTS.report && prompts.some(p => !cache[hashOf(p.content)] && !heuristic(p.content))
+  if (needsApi && !API_KEY) { console.error('OPENROUTER_API_KEY not set — pass --dry, --report, or use --dump + the cultivation-audit skill.'); process.exit(1) }
 
   const classifications = await pool(prompts, OPTS.concurrency, p => classify(p.content), done => {
     if (done % 50 === 0 || done === prompts.length) process.stdout.write(`  ${done}/${prompts.length}\r`)

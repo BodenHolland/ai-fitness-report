@@ -83,7 +83,8 @@ findings above.
 |---|---|
 | [`cultivation.ts`](./cultivation.ts) | **The product router.** Server-side code for an app's backend: classify each request into a regime and return the matching system prompt before calling the model. Provider-agnostic (OpenRouter-compatible `/chat/completions`). |
 | [`skills/cultivation-mode/SKILL.md`](./skills/cultivation-mode/SKILL.md) | **The behavioral skill.** The same discipline as a portable instruction set — installable as a Claude/Agent Skill, or pasted into any model as a system prompt to change how it talks to *you*. |
-| [`audit.ts`](./audit.ts) | **Personal audit CLI.** Scans your local Claude Code transcripts, classifies every prompt into a regime, and writes a Markdown report — your own regime mix, monthly timeline, per-project breakdown, top topics, and moments cultivation-mode would have changed. Runs entirely locally. |
+| [`skills/cultivation-audit/SKILL.md`](./skills/cultivation-audit/SKILL.md) | **The audit skill.** Drives `audit.ts` end-to-end using in-context classification — no external API, nothing leaves your Claude Code trust boundary. Invoke in a fresh chat: "run the cultivation audit." |
+| [`audit.ts`](./audit.ts) | **The audit script.** Walks `~/.claude/projects/*.jsonl`, extracts your prompts, and generates the report. Two paths: driven by the audit skill (stays local, uses subscription), or headless via OpenRouter (unattended, uses free tier that trains on data). |
 
 **Two different jobs:** the skill changes how a model talks to *you* in a chat;
 the router changes how *your app's* AI talks to *your users*, automatically.
@@ -139,23 +140,36 @@ instruction.
 
 ## Running the audit
 
-Scan every conversation in `~/.claude/projects/`, classify each prompt, and write a report to `cultivation-audit-report.md`.
+Two paths — same report either way.
+
+### A) Through Claude Code (recommended — stays local)
+
+Install the audit skill, then invoke it in a fresh Claude Code chat:
 
 ```bash
-# needs Node 22 (for --experimental-strip-types) and an OpenRouter key
-export OPENROUTER_API_KEY=sk-or-...
-node --experimental-strip-types audit.ts
-
-# or without an API key — heuristics only, everything routes to offload
-node --experimental-strip-types audit.ts --dry
-
-# test on the 5 most-recent sessions first
-node --experimental-strip-types audit.ts --sample 5
+mkdir -p ~/.claude/skills/cultivation-audit
+cp skills/cultivation-audit/SKILL.md ~/.claude/skills/cultivation-audit/
 ```
 
-Flags: `--sample N` (recent N sessions), `--dry` (no API calls), `--out PATH`, `--concurrency N`, `--model NAME` (defaults to `google/gemini-2.0-flash-exp:free`).
+Then in Claude Code:
 
-Everything stays local. Classifications are cached in `.cultivation-audit-cache.json` so re-runs are free. The report is descriptive — a mirror of your own regime mix — not a benchmark; there is no evidence-based "healthy distribution."
+> "Run the cultivation audit."
+
+Claude will `cd` to this repo, extract your prompts, classify them in-context (no external API), write them to the local cache, and generate the report. Uses your existing Claude Code subscription; nothing leaves your machine → Anthropic trust boundary.
+
+### B) Headless via OpenRouter
+
+Unattended — good for full-archive one-shots, but the default free-tier model trains on your prompts.
+
+```bash
+export OPENROUTER_API_KEY=sk-or-...
+node --experimental-strip-types audit.ts --sample 5    # test on 5 recent sessions
+node --experimental-strip-types audit.ts               # full archive
+```
+
+Flags: `--sample N`, `--dump` (write prompts file for external classifier), `--report` (regenerate report from cache, no API), `--dry` (heuristics only), `--out PATH`, `--concurrency N`, `--model NAME`.
+
+Classifications are cached in `.cultivation-audit-cache.json` so re-runs are free. The report is a mirror — descriptive, not prescriptive; there is no evidence-based "healthy distribution."
 
 ---
 
