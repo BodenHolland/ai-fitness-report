@@ -1,16 +1,16 @@
 ---
-name: cultivation-audit
+name: ai-fitness-report
 description: >-
   Analyze the user's own Claude Code conversation archive locally, classify
   every past prompt into a cultivation-mode regime (skill_building /
-  expert_decision / offload), and write a personal report. Uses Claude Code
-  itself for the classification — no external API, nothing leaves the user's
-  machine → Anthropic trust boundary. Trigger when the user asks to audit their
-  AI use, see how they use Claude, run the cultivation audit, understand their
-  own regime distribution, or invokes this skill by name.
+  expert_decision / offload), and write a personal AI-use report. Uses Claude
+  Code itself for the classification — no external API, nothing leaves the
+  user's machine → Anthropic trust boundary. Trigger when the user asks to
+  audit their AI use, generate an AI fitness report, see how they use Claude,
+  understand their own regime distribution, or invokes this skill by name.
 ---
 
-# cultivation-audit
+# ai-fitness-report
 
 Run the local audit on the user's Claude Code archive using in-context
 classification (no OpenRouter, no external API). Drive the `audit.ts` script's
@@ -18,8 +18,9 @@ classification (no OpenRouter, no external API). Drive the `audit.ts` script's
 
 ## Where to run
 
-The script lives in the `cultivation-mode` repo at `~/Development/cultivation-mode`.
-`cd` there before running any command.
+The script lives in the `ai-fitness-report` repo at `~/Development/cultivation-mode`
+(local checkout still uses the old directory name). `cd` there before running any
+command.
 
 ## Step 1 — extract prompts
 
@@ -32,12 +33,12 @@ source ~/.nvm/nvm.sh && nvm use 22
 node --experimental-strip-types audit.ts --dump [--sample N]
 ```
 
-That writes `.cultivation-audit-prompts.json` — an array of
+That writes `.ai-fitness-prompts.json` — an array of
 `{hash, project, content}` objects for the uncached prompts.
 
 ## Step 2 — classify in-context
 
-Read `.cultivation-audit-prompts.json` and `.cultivation-audit-cache.json` (may
+Read `.ai-fitness-prompts.json` and `.ai-fitness-cache.json` (may
 not exist — that's fine, treat as `{}`).
 
 For each prompt, decide:
@@ -68,10 +69,17 @@ build a JSON object keyed by `hash`:
 }
 ```
 
+**Bulk-classification tip for large archives.** If the dump returns 500+
+prompts, a fully manual pass burns tokens. A better flow: write an overrides
+JSON of only the prompts that look like `expert_decision` or `skill_building`,
+then default every other uncached prompt to `offload` in a single script pass.
+The report's guardrails already say offload is the correct default when
+unsure — this just automates that default at scale.
+
 ## Step 3 — write classifications to cache
 
 After each batch (or at the end for small runs), merge into
-`.cultivation-audit-cache.json`. Read the existing file (if any), spread it
+`.ai-fitness-cache.json`. Read the existing file (if any), spread it
 plus your new entries, write back. Do not overwrite unrelated entries — this
 is an append-only cache keyed by content hash.
 
@@ -82,12 +90,12 @@ node --experimental-strip-types audit.ts --report [--sample N]
 ```
 
 (Pass the same `--sample` value used in Step 1.) This writes
-`cultivation-audit-report.md` using the cached classifications with zero API
+`ai-fitness-report.md` using the cached classifications with zero API
 calls.
 
 ## Step 5 — show the user
 
-Read `cultivation-audit-report.md` and summarize the standout findings in
+Read `ai-fitness-report.md` and summarize the standout findings in
 chat: their regime mix, the projects that skew skill-building or expert-decision
 (not offload), and 2–3 specific "moments cultivation-mode would have changed"
 examples that stood out. Point them at the full file for the rest. Frame it as

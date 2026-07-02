@@ -83,7 +83,7 @@ findings above.
 |---|---|
 | [`cultivation.ts`](./cultivation.ts) | **The product router.** Server-side code for an app's backend: classify each request into a regime and return the matching system prompt before calling the model. Provider-agnostic (OpenRouter-compatible `/chat/completions`). |
 | [`skills/cultivation-mode/SKILL.md`](./skills/cultivation-mode/SKILL.md) | **The behavioral skill.** The same discipline as a portable instruction set — installable as a Claude/Agent Skill, or pasted into any model as a system prompt to change how it talks to *you*. |
-| [`skills/cultivation-audit/SKILL.md`](./skills/cultivation-audit/SKILL.md) | **The audit skill.** Drives `audit.ts` end-to-end using in-context classification — no external API, nothing leaves your Claude Code trust boundary. Invoke in a fresh chat: "run the cultivation audit." |
+| [`skills/ai-fitness-report/SKILL.md`](./skills/ai-fitness-report/SKILL.md) | **The audit skill.** Drives `audit.ts` end-to-end using in-context classification — no external API, nothing leaves your Claude Code trust boundary. Invoke in a fresh chat: "generate my AI fitness report." |
 | [`audit.ts`](./audit.ts) | **The audit script.** Walks `~/.claude/projects/*.jsonl`, extracts your prompts, and generates the report. Two paths: driven by the audit skill (stays local, uses subscription), or headless via OpenRouter (unattended, uses free tier that trains on data). |
 
 **Two different jobs:** the skill changes how a model talks to *you* in a chat;
@@ -147,13 +147,13 @@ Two paths — same report either way.
 Install the audit skill, then invoke it in a fresh Claude Code chat:
 
 ```bash
-mkdir -p ~/.claude/skills/cultivation-audit
-cp skills/cultivation-audit/SKILL.md ~/.claude/skills/cultivation-audit/
+mkdir -p ~/.claude/skills/ai-fitness-report
+cp skills/ai-fitness-report/SKILL.md ~/.claude/skills/ai-fitness-report/
 ```
 
 Then in Claude Code:
 
-> "Run the cultivation audit."
+> "Generate my AI fitness report."
 
 Claude will `cd` to this repo, extract your prompts, classify them in-context (no external API), write them to the local cache, and generate the report. Uses your existing Claude Code subscription; nothing leaves your machine → Anthropic trust boundary.
 
@@ -169,7 +169,7 @@ node --experimental-strip-types audit.ts               # full archive
 
 Flags: `--sample N`, `--dump` (write prompts file for external classifier), `--report` (regenerate report from cache, no API), `--dry` (heuristics only), `--out PATH`, `--concurrency N`, `--model NAME`.
 
-Classifications are cached in `.cultivation-audit-cache.json` so re-runs are free. The report is a mirror — descriptive, not prescriptive; there is no evidence-based "healthy distribution."
+Classifications are cached in `.ai-fitness-cache.json` so re-runs are free. The report is a mirror — descriptive, not prescriptive; there is no evidence-based "healthy distribution."
 
 ---
 

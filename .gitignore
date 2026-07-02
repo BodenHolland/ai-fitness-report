@@ -1,9 +1,11 @@
 node_modules/
 .DS_Store
 *.log
+.ai-fitness-*.json
 .cultivation-audit-*.json
 .cultivation-audit-*.tsv
 .classify-overrides.json
+ai-fitness-report.md
 cultivation-audit-report.md
 audit-*.md
 sample-report.md

@@ -4,7 +4,7 @@
 // Two ways to run this:
 //
 // A) Through Claude Code (uses your subscription, no external API, no training):
-//      invoke the `cultivation-audit` skill in a fresh Claude Code chat.
+//      invoke the `ai-fitness-report` skill in a fresh Claude Code chat.
 //      The skill drives this script's --dump and --report modes.
 //
 // B) Headless via OpenRouter (unattended, but hits external API):
@@ -12,11 +12,11 @@
 //
 // Flags:
 //   --sample N       only the N most-recent sessions (default: all)
-//   --dump           extract prompts to .cultivation-audit-prompts.json and exit
+//   --dump           extract prompts to .ai-fitness-prompts.json and exit
 //                    (Claude Code flow — classification happens in the skill)
 //   --report         generate report from cache only; skip all classification
 //   --dry            no API calls; heuristics only (everything else → unclassified)
-//   --out PATH       report path (default: ./cultivation-audit-report.md)
+//   --out PATH       report path (default: ./ai-fitness-report.md)
 //   --concurrency N  parallel classifier calls when using OpenRouter (default: 8)
 //   --model NAME     OpenRouter model (default: google/gemini-2.0-flash-exp:free)
 //
@@ -57,11 +57,11 @@ const OPTS = {
   dry: flag('--dry'),
   dump: flag('--dump'),
   report: flag('--report'),
-  out: val('--out', 'cultivation-audit-report.md'),
+  out: val('--out', 'ai-fitness-report.md'),
   concurrency: Number(val('--concurrency', '8')),
   model: val('--model', 'google/gemini-2.0-flash-exp:free'),
 }
-const PROMPTS_PATH = '.cultivation-audit-prompts.json'
+const PROMPTS_PATH = '.ai-fitness-prompts.json'
 const API_KEY = process.env.OPENROUTER_API_KEY
 
 // ---------------------------------------------------------------------------
@@ -159,7 +159,7 @@ async function llmClassify(text: string): Promise<Classification> {
 // Cache — hash-keyed, so re-runs don't re-classify
 // ---------------------------------------------------------------------------
 
-const CACHE_PATH = '.cultivation-audit-cache.json'
+const CACHE_PATH = '.ai-fitness-cache.json'
 type Cache = Record<string, Classification>
 const cache: Cache = existsSync(CACHE_PATH) ? JSON.parse(readFileSync(CACHE_PATH, 'utf8')) : {}
 const hashOf = (s: string) => createHash('sha1').update(s).digest('hex').slice(0, 16)
@@ -239,7 +239,7 @@ function buildReport(rows: (Prompt & Classification)[]): string {
   lines.push('')
   lines.push(`Scanned **${new Set(rows.map(r => r.session)).size} sessions** · **${total} user prompts** · ${range}`)
   lines.push('')
-  lines.push(`This is descriptive, not prescriptive. There's no evidence-based "healthy distribution" — it's a mirror of your own regime mix, mismatches, and topic patterns. See [cultivation-mode](https://github.com/BodenHolland/cultivation-mode) for the intervention.`)
+  lines.push(`This is descriptive, not prescriptive. There's no evidence-based "healthy distribution" — it's a mirror of your own regime mix, mismatches, and topic patterns. See [cultivation-mode](https://github.com/BodenHolland/ai-fitness-report) for the intervention.`)
   lines.push('')
 
   lines.push('## Regime distribution')
@@ -317,7 +317,7 @@ async function main() {
     void keepSessions
   }
 
-  // --dump: write UNCACHED prompts to a batch file for the cultivation-audit skill
+  // --dump: write UNCACHED prompts to a batch file for the ai-fitness-report skill
   // to classify in-context (uses Claude Code inference, no external API).
   if (OPTS.dump) {
     const batch = prompts
@@ -326,13 +326,13 @@ async function main() {
     writeFileSync(PROMPTS_PATH, JSON.stringify(batch, null, 2))
     console.log(`Wrote ${batch.length} uncached prompts to ${PROMPTS_PATH}`)
     console.log(`(${prompts.length - batch.length} were already cached or heuristic-classified)`)
-    console.log(`Next: classify them (via the cultivation-audit skill), then run: node --experimental-strip-types audit.ts --report`)
+    console.log(`Next: classify them (via the ai-fitness-report skill), then run: node --experimental-strip-types audit.ts --report`)
     return
   }
 
   console.log(`Classifying ${prompts.length} prompts (dry=${OPTS.dry}, report=${OPTS.report}, concurrency=${OPTS.concurrency})…`)
   const needsApi = !OPTS.dry && !OPTS.report && prompts.some(p => !cache[hashOf(p.content)] && !heuristic(p.content))
-  if (needsApi && !API_KEY) { console.error('OPENROUTER_API_KEY not set — pass --dry, --report, or use --dump + the cultivation-audit skill.'); process.exit(1) }
+  if (needsApi && !API_KEY) { console.error('OPENROUTER_API_KEY not set — pass --dry, --report, or use --dump + the ai-fitness-report skill.'); process.exit(1) }
 
   const classifications = await pool(prompts, OPTS.concurrency, p => classify(p.content), done => {
     if (done % 50 === 0 || done === prompts.length) process.stdout.write(`  ${done}/${prompts.length}\r`)
