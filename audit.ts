@@ -108,12 +108,22 @@ function readSessions(): Prompt[] {
 
 const OPT_OUT = /\b(just (tell|give|show|do)\b|give me the answer|stop asking|no hints?|just answer)\b/i
 const SLASH = /^\/[a-z][\w-]*(\s|$)/i
+// System-emitted user messages (task pings, command stdout, slash-command wrappers).
+// These aren't real user cognition — treat as offload noise.
+const SYSTEM_TAG = /^<(task-notification|local-command-stdout|local-command-stderr|command-name|command-message|command-args|scheduled-task|create-pr-command)\b/i
+// One-word acknowledgements / directions that carry no judgement.
+const ACK = /^(ok|okay|k|kk|yes|no|sure|thanks|thx|ty|great|grat|perfect|cool|nice|nope|yep|ship it|do it|go|next|more|continue|proceed|resume|keep going|carry on|almost done\??|still going\??|done\??|all done\??|check|check again|👍|✅)[.!?\s]*$/i
+// Pasted logs / URLs / build output — starts with a URL or a timestamped log line.
+const PASTED_LOG = /^(https?:\/\/|\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/
 
 function heuristic(text: string): Classification | null {
   const t = text.trim()
   if (t.length < 8) return { regime: 'offload', topic: 'trivial', stakes: 'low' }
+  if (SYSTEM_TAG.test(t)) return { regime: 'offload', topic: 'system-message', stakes: 'low' }
   if (SLASH.test(t)) return { regime: 'offload', topic: 'slash-command', stakes: 'low' }
   if (OPT_OUT.test(t)) return { regime: 'offload', topic: 'opt-out', stakes: 'low' }
+  if (ACK.test(t)) return { regime: 'offload', topic: 'ack', stakes: 'low' }
+  if (PASTED_LOG.test(t)) return { regime: 'offload', topic: 'pasted-log', stakes: 'low' }
   return null
 }
 
