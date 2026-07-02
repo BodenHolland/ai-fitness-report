@@ -1,0 +1,312 @@
+// audit.ts — scan local Claude Code transcripts, classify every user prompt
+// into a cultivation-mode regime, and write a personal report.
+//
+// Run:
+//   OPENROUTER_API_KEY=... node --experimental-strip-types audit.ts
+//   OPENROUTER_API_KEY=... node --experimental-strip-types audit.ts --sample 5 --dry
+//   node --experimental-strip-types audit.ts --dry              # no API calls
+//
+// Flags:
+//   --sample N       classify only N most-recent sessions (default: all)
+//   --dry            skip API calls; use heuristics only
+//   --out PATH       report path (default: ./cultivation-audit-report.md)
+//   --concurrency N  parallel classifier calls (default: 8)
+//   --model NAME     OpenRouter model (default: google/gemini-2.0-flash-exp:free)
+//
+// The report is descriptive, not prescriptive. There is no evidence-based
+// "healthy distribution" — this is your own mirror, not a benchmark.
+
+import { readdirSync, readFileSync, existsSync, writeFileSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join, basename } from 'node:path'
+import { createHash } from 'node:crypto'
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+type Regime = 'skill_building' | 'expert_decision' | 'offload'
+
+interface Prompt {
+  project: string   // decoded project dir, e.g. "volunteer-EBT"
+  session: string   // session id
+  timestamp: string
+  content: string
+}
+
+interface Classification { regime: Regime; topic: string; stakes: 'low' | 'high' }
+
+// ---------------------------------------------------------------------------
+// CLI
+// ---------------------------------------------------------------------------
+
+const args = process.argv.slice(2)
+const flag = (name: string) => args.includes(name)
+const val = (name: string, d: string) => {
+  const i = args.indexOf(name); return i >= 0 && args[i + 1] ? args[i + 1] : d
+}
+const OPTS = {
+  sample: Number(val('--sample', '0')),
+  dry: flag('--dry'),
+  out: val('--out', 'cultivation-audit-report.md'),
+  concurrency: Number(val('--concurrency', '8')),
+  model: val('--model', 'google/gemini-2.0-flash-exp:free'),
+}
+const API_KEY = process.env.OPENROUTER_API_KEY
+
+// ---------------------------------------------------------------------------
+// Ingest — walk ~/.claude/projects/*/*.jsonl for enqueue rows
+// ---------------------------------------------------------------------------
+
+const PROJECTS_DIR = join(homedir(), '.claude', 'projects')
+
+function decodeProject(dir: string): string {
+  // Claude Code encodes /Users/boden/Development/foo as -Users-boden-Development-foo
+  return dir.replace(/^-Users-boden-Development-?/, '') || dir
+}
+
+function readSessions(): Prompt[] {
+  const prompts: Prompt[] = []
+  const projects = readdirSync(PROJECTS_DIR).filter(d => statSync(join(PROJECTS_DIR, d)).isDirectory())
+  for (const proj of projects) {
+    const files = readdirSync(join(PROJECTS_DIR, proj))
+      .filter(f => f.endsWith('.jsonl'))
+      .map(f => ({ f, path: join(PROJECTS_DIR, proj, f), mtime: statSync(join(PROJECTS_DIR, proj, f)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime)
+    for (const { f, path } of files) {
+      const session = f.replace(/\.jsonl$/, '')
+      for (const line of readFileSync(path, 'utf8').split('\n')) {
+        if (!line.trim()) continue
+        let row: any; try { row = JSON.parse(line) } catch { continue }
+        if (row.type === 'queue-operation' && row.operation === 'enqueue' && typeof row.content === 'string' && row.content.trim()) {
+          prompts.push({
+            project: decodeProject(proj),
+            session,
+            timestamp: row.timestamp ?? '',
+            content: row.content.trim(),
+          })
+        }
+      }
+    }
+  }
+  return prompts
+}
+
+// ---------------------------------------------------------------------------
+// Classifier (mirrors cultivation.ts, extended to return topic + stakes)
+// ---------------------------------------------------------------------------
+
+const OPT_OUT = /\b(just (tell|give|show|do)\b|give me the answer|stop asking|no hints?|just answer)\b/i
+const SLASH = /^\/[a-z][\w-]*(\s|$)/i
+
+function heuristic(text: string): Classification | null {
+  const t = text.trim()
+  if (t.length < 8) return { regime: 'offload', topic: 'trivial', stakes: 'low' }
+  if (SLASH.test(t)) return { regime: 'offload', topic: 'slash-command', stakes: 'low' }
+  if (OPT_OUT.test(t)) return { regime: 'offload', topic: 'opt-out', stakes: 'low' }
+  return null
+}
+
+const CLASSIFIER_SYSTEM = `Classify the user's request. Return strict JSON: {"regime": "skill_building"|"expert_decision"|"offload", "topic": "short-kebab-topic", "stakes": "low"|"high"}.
+- "skill_building": user is trying to learn or get better at something they'll later do without AI ("help me understand", "teach me", "I'm learning", homework, practicing craft).
+- "expert_decision": already-competent user making a consequential, checkable judgement where over-trusting the AI is the risk ("review this", "is this right", "should I", "check my", high stakes).
+- "offload": no learning goal, nothing rides on being wrong — drafting/formatting/translating/summarizing/lookups/boilerplate/throughput. DEFAULT when unsure and low stakes.
+"topic": one short tag identifying the domain, e.g. "sql", "react-ui", "career-decision", "email-draft".
+"stakes": "high" only when a wrong answer causes real, hard-to-reverse harm.`
+
+async function llmClassify(text: string): Promise<Classification> {
+  const body = {
+    model: OPTS.model,
+    response_format: { type: 'json_object' },
+    max_tokens: 60,
+    messages: [
+      { role: 'system', content: CLASSIFIER_SYSTEM },
+      { role: 'user', content: text.slice(0, 500) },
+    ],
+  }
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const data = await res.json() as any
+  const parsed = JSON.parse(data.choices[0].message.content)
+  const regime: Regime = (['skill_building', 'expert_decision', 'offload'] as const).includes(parsed.regime) ? parsed.regime : 'offload'
+  return { regime, topic: String(parsed.topic || 'unknown').toLowerCase(), stakes: parsed.stakes === 'high' ? 'high' : 'low' }
+}
+
+// ---------------------------------------------------------------------------
+// Cache — hash-keyed, so re-runs don't re-classify
+// ---------------------------------------------------------------------------
+
+const CACHE_PATH = '.cultivation-audit-cache.json'
+type Cache = Record<string, Classification>
+const cache: Cache = existsSync(CACHE_PATH) ? JSON.parse(readFileSync(CACHE_PATH, 'utf8')) : {}
+const hashOf = (s: string) => createHash('sha1').update(s).digest('hex').slice(0, 16)
+
+async function classify(text: string): Promise<Classification> {
+  const h = hashOf(text)
+  if (cache[h]) return cache[h]
+  const heur = heuristic(text)
+  if (heur) { cache[h] = heur; return heur }
+  if (OPTS.dry || !API_KEY) {
+    const fallback: Classification = { regime: 'offload', topic: 'unclassified', stakes: 'low' }
+    cache[h] = fallback; return fallback
+  }
+  try { const c = await llmClassify(text); cache[h] = c; return c }
+  catch { return { regime: 'offload', topic: 'error', stakes: 'low' } }
+}
+
+// pool with a hard concurrency limit
+async function pool<T, R>(items: T[], n: number, fn: (t: T, i: number) => Promise<R>, onTick?: (done: number) => void): Promise<R[]> {
+  const out: R[] = new Array(items.length); let idx = 0, done = 0
+  const workers = Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (idx < items.length) { const i = idx++; out[i] = await fn(items[i], i); done++; onTick?.(done) }
+  })
+  await Promise.all(workers); return out
+}
+
+// ---------------------------------------------------------------------------
+// Report
+// ---------------------------------------------------------------------------
+
+const pct = (n: number, total: number) => total ? `${((n / total) * 100).toFixed(1)}%` : '0%'
+const bar = (n: number, total: number, width = 24) => '█'.repeat(Math.round((n / Math.max(total, 1)) * width))
+
+function buildReport(rows: (Prompt & Classification)[]): string {
+  const total = rows.length
+  const byRegime = { skill_building: 0, expert_decision: 0, offload: 0 } as Record<Regime, number>
+  for (const r of rows) byRegime[r.regime]++
+
+  // Timeline: month → regime counts
+  const byMonth = new Map<string, Record<Regime, number>>()
+  for (const r of rows) {
+    const m = r.timestamp.slice(0, 7) || 'unknown'
+    if (!byMonth.has(m)) byMonth.set(m, { skill_building: 0, expert_decision: 0, offload: 0 })
+    byMonth.get(m)![r.regime]++
+  }
+
+  // Project × regime
+  const byProject = new Map<string, Record<Regime, number>>()
+  for (const r of rows) {
+    if (!byProject.has(r.project)) byProject.set(r.project, { skill_building: 0, expert_decision: 0, offload: 0 })
+    byProject.get(r.project)![r.regime]++
+  }
+
+  // Topics per regime (top 8)
+  const topicsIn = (regime: Regime) => {
+    const t = new Map<string, number>()
+    for (const r of rows) if (r.regime === regime && r.topic && r.topic !== 'unknown') t.set(r.topic, (t.get(r.topic) ?? 0) + 1)
+    return [...t.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
+  }
+
+  // Mismatch candidates — skill_building or expert_decision prompts that DIDN'T
+  // include an opt-out phrase (i.e., you were probably given a full answer or
+  // the AI didn't ask you to commit first). These are the moments where
+  // cultivation-mode would have changed the response.
+  const mismatches = rows.filter(r => r.regime !== 'offload' && !OPT_OUT.test(r.content)).slice(0, 12)
+
+  const now = new Date().toISOString().slice(0, 10)
+  const dates = rows.map(r => r.timestamp).filter(Boolean).sort()
+  const range = dates.length ? `${dates[0].slice(0, 10)} → ${dates[dates.length - 1].slice(0, 10)}` : 'n/a'
+
+  const lines: string[] = []
+  lines.push(`# Cultivation audit — ${now}`)
+  lines.push('')
+  lines.push(`Scanned **${new Set(rows.map(r => r.session)).size} sessions** · **${total} user prompts** · ${range}`)
+  lines.push('')
+  lines.push(`This is descriptive, not prescriptive. There's no evidence-based "healthy distribution" — it's a mirror of your own regime mix, mismatches, and topic patterns. See [cultivation-mode](https://github.com/BodenHolland/cultivation-mode) for the intervention.`)
+  lines.push('')
+
+  lines.push('## Regime distribution')
+  lines.push('')
+  lines.push('| Regime | Count | Share |    |')
+  lines.push('|---|---:|---:|:---|')
+  for (const r of ['skill_building', 'expert_decision', 'offload'] as Regime[]) {
+    lines.push(`| ${r.replace('_', ' ')} | ${byRegime[r]} | ${pct(byRegime[r], total)} | \`${bar(byRegime[r], total)}\` |`)
+  }
+  lines.push('')
+
+  lines.push('## By month')
+  lines.push('')
+  lines.push('| Month | skill | decision | offload | total |')
+  lines.push('|---|---:|---:|---:|---:|')
+  for (const [m, c] of [...byMonth.entries()].sort()) {
+    const t = c.skill_building + c.expert_decision + c.offload
+    lines.push(`| ${m} | ${c.skill_building} | ${c.expert_decision} | ${c.offload} | ${t} |`)
+  }
+  lines.push('')
+
+  lines.push('## By project')
+  lines.push('')
+  lines.push('| Project | skill | decision | offload | total |')
+  lines.push('|---|---:|---:|---:|---:|')
+  const projRows = [...byProject.entries()].map(([p, c]) => ({ p, c, t: c.skill_building + c.expert_decision + c.offload })).sort((a, b) => b.t - a.t)
+  for (const { p, c, t } of projRows.slice(0, 20)) lines.push(`| ${p} | ${c.skill_building} | ${c.expert_decision} | ${c.offload} | ${t} |`)
+  lines.push('')
+
+  lines.push('## Top topics per regime')
+  lines.push('')
+  for (const r of ['skill_building', 'expert_decision', 'offload'] as Regime[]) {
+    const top = topicsIn(r)
+    if (!top.length) continue
+    lines.push(`**${r.replace('_', ' ')}** — ${top.map(([t, n]) => `${t} (${n})`).join(', ')}`)
+    lines.push('')
+  }
+
+  lines.push('## Moments cultivation-mode would have changed')
+  lines.push('')
+  lines.push(`${mismatches.length} of your recent skill-building / expert-decision requests didn't include an "just tell me" opt-out — i.e., you were likely handed a full answer without an attempt-first or commit-first step. A sample:`)
+  lines.push('')
+  for (const m of mismatches) {
+    const snippet = m.content.replace(/\n/g, ' ').slice(0, 140)
+    lines.push(`- **[${m.regime.replace('_', ' ')}]** \`${m.project}\` — "${snippet}${m.content.length > 140 ? '…' : ''}"`)
+  }
+  lines.push('')
+
+  lines.push('## What to actually do with this')
+  lines.push('')
+  lines.push('- If **skill_building** shows up meaningfully in a project you care about, invoke `cultivation-mode` at the start of those chats — that\'s where withhold-and-fade would have helped.')
+  lines.push('- If **expert_decision** shows up in a project, invoke it there too — you get commit-first + cheap-to-verify instead of the AI anchoring your judgment.')
+  lines.push('- Everything else is **offload** — don\'t add friction; the skill would route it to plain offload anyway.')
+  lines.push('- The honest ceiling: this prevents skill erosion / capture, not "makes you smarter." Don\'t market it to yourself as more than that.')
+  lines.push('')
+
+  return lines.join('\n')
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+async function main() {
+  console.log('Reading transcripts…')
+  let prompts = readSessions()
+  if (!prompts.length) { console.error(`No prompts found under ${PROJECTS_DIR}`); process.exit(1) }
+
+  // sort newest first for --sample
+  prompts.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))
+  if (OPTS.sample > 0) {
+    const keepSessions = new Set(prompts.slice(0, OPTS.sample * 40).map(p => p.session))
+    const uniq = [...new Set(prompts.map(p => p.session))].slice(0, OPTS.sample)
+    prompts = prompts.filter(p => uniq.includes(p.session))
+    void keepSessions
+  }
+
+  console.log(`Classifying ${prompts.length} prompts (dry=${OPTS.dry}, concurrency=${OPTS.concurrency})…`)
+  if (!OPTS.dry && !API_KEY) { console.error('OPENROUTER_API_KEY not set — pass --dry to run without the classifier.'); process.exit(1) }
+
+  const classifications = await pool(prompts, OPTS.concurrency, p => classify(p.content), done => {
+    if (done % 50 === 0 || done === prompts.length) process.stdout.write(`  ${done}/${prompts.length}\r`)
+  })
+  process.stdout.write('\n')
+  writeFileSync(CACHE_PATH, JSON.stringify(cache, null, 2))
+
+  const rows = prompts.map((p, i) => ({ ...p, ...classifications[i] }))
+  const report = buildReport(rows)
+  writeFileSync(OPTS.out, report)
+  console.log(`Report written to ${OPTS.out}`)
+  console.log(`Cache: ${CACHE_PATH} (${Object.keys(cache).length} entries)`)
+}
+
+main().catch(e => { console.error(e); process.exit(1) })

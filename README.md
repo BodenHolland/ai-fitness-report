@@ -83,6 +83,7 @@ findings above.
 |---|---|
 | [`cultivation.ts`](./cultivation.ts) | **The product router.** Server-side code for an app's backend: classify each request into a regime and return the matching system prompt before calling the model. Provider-agnostic (OpenRouter-compatible `/chat/completions`). |
 | [`skills/cultivation-mode/SKILL.md`](./skills/cultivation-mode/SKILL.md) | **The behavioral skill.** The same discipline as a portable instruction set — installable as a Claude/Agent Skill, or pasted into any model as a system prompt to change how it talks to *you*. |
+| [`audit.ts`](./audit.ts) | **Personal audit CLI.** Scans your local Claude Code transcripts, classifies every prompt into a regime, and writes a Markdown report — your own regime mix, monthly timeline, per-project breakdown, top topics, and moments cultivation-mode would have changed. Runs entirely locally. |
 
 **Two different jobs:** the skill changes how a model talks to *you* in a chat;
 the router changes how *your app's* AI talks to *your users*, automatically.
@@ -133,6 +134,28 @@ Then invoke it by name (or let it auto-trigger on a relevant request); it stays
 active for the rest of that conversation. In any other tool, paste the body of
 `SKILL.md` (everything below the frontmatter) as a system prompt / custom
 instruction.
+
+---
+
+## Running the audit
+
+Scan every conversation in `~/.claude/projects/`, classify each prompt, and write a report to `cultivation-audit-report.md`.
+
+```bash
+# needs Node 22 (for --experimental-strip-types) and an OpenRouter key
+export OPENROUTER_API_KEY=sk-or-...
+node --experimental-strip-types audit.ts
+
+# or without an API key — heuristics only, everything routes to offload
+node --experimental-strip-types audit.ts --dry
+
+# test on the 5 most-recent sessions first
+node --experimental-strip-types audit.ts --sample 5
+```
+
+Flags: `--sample N` (recent N sessions), `--dry` (no API calls), `--out PATH`, `--concurrency N`, `--model NAME` (defaults to `google/gemini-2.0-flash-exp:free`).
+
+Everything stays local. Classifications are cached in `.cultivation-audit-cache.json` so re-runs are free. The report is descriptive — a mirror of your own regime mix — not a benchmark; there is no evidence-based "healthy distribution."
 
 ---
 
