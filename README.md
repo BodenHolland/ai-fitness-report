@@ -1,68 +1,54 @@
-# Cultivation Mode
+## What this is
 
-An evidence-grounded discipline for how AI systems should interact with people —
-so the tool builds the user's capability instead of eroding it.
+Two tools and a system prompt built on the same idea. AI is a powerful tool, but not without consequences. This skill helps identify your usage patterns and course-correct depending on your desired outcome.
 
-It is **not** "make the AI withhold answers." It's a **router**: classify what a
-given request is actually optimizing, then apply the intervention that matches —
-because the credible evidence contains two different problems that need two
-different, sometimes opposite, responses, and most requests need neither.
+- A **Skill** you install into Claude Code that changes how Claude talks to you, so it doesn't hand over the answer when you were trying to learn or trying to make a real decision.
+- A **Report generator** that reads your past Claude Code chats and tells you how you've actually been using AI. Where you were offloading, where you were learning, where you were letting the AI make consequential calls for you.
+- A **router** developers can drop into their own AI app to do the same routing automatically for their users.
+
+Everything is grounded in the research at the bottom. Nothing here claims to make you smarter or faster. The honest claim is: it can keep AI from eroding skill you actually want to keep, and it can stop you from trusting a wrong answer on something that matters.
 
 ---
 
-## About
+## Why this exists
 
-The default assistant paradigm is a single slider: *how much does the AI help?*,
-with the implicit belief that more help is always better and that performance
-**while the tool is present** is the outcome that matters.
+Today's AI assistants have one dial: how much to help, with the assumption that more help is always better. That assumption is wrong.
 
-The most credible evidence breaks that slider. Performance and the human
-capability underneath it can move in **opposite directions**. So the real design
-question isn't a setting — it's a **prior classification**:
+Handing over the answer raises your performance while the AI is in the room and lowers your ability once it's not. Studies (linked below) find measurable skill loss after using answer-giving AI, and automation bias so strong that even expert radiologists collapse from 82% to 45% accuracy when the AI is confidently wrong.
 
-> For *this* request, am I optimizing the assisted output, the user's future
-> unaided skill, or the user's resistance to a wrong model?
+So the real question for a given chat isn't "how helpful should the AI be." It's:
 
-Those three goals need structurally different machines:
+> For this request, am I optimizing the assisted output, my future unaided skill, or my resistance to a wrong answer?
 
-| Regime | When | Intervention |
+The three answers need different behavior from the AI.
+
+---
+
+## Three modes
+
+| Mode | When it applies | What the AI should do |
 |---|---|---|
-| **Skill-building** | User is learning something they'll later do without AI | **Withhold + fade** — elicit their attempt first, give the smallest hint that unblocks, fade support as competence grows |
-| **Expert decision** | An already-competent user makes a consequential, checkable call where over-trusting the AI is the risk | **Commit-first + cheap-to-check** — get their read first, then surface one verifiable claim; *no* confidence scores or "here's my reasoning" (they backfire) |
-| **Offload** | No learning goal, nothing rides on being wrong | **Just do it** — answer fully and fast, easy to spot-check. *Most requests live here.* |
+| **Skill-building** | You are trying to learn or get better at something you'll later do without AI | Withhold and fade. Get your attempt first, give the smallest hint that unblocks you, back off as you get better. |
+| **Expert decision** | You're already competent, the call is consequential and checkable, over-trusting the AI is the risk | Get your read first, then surface one verifiable claim. No confidence scores, no "here's my reasoning." Both make you trust wrong answers more. |
+| **Offload** | No learning goal, nothing bad happens if the AI is wrong | Just answer. Fast. Easy to spot-check. Most requests live here. |
 
-Applying skill-building or expert-decision friction to an offload task is a pure
-tax with no payoff.
+The point of routing is to avoid taxing an offload request (formatting an email, running a build, drafting boilerplate) with friction it doesn't need. That would just be annoying with no payoff. Withholding is only earned on the ~10% of requests where the user actually wanted to learn or was making a real decision.
+
+If you're not sure which mode a request is in, it's offload. That's the honest default.
 
 ---
 
 ## Research
 
-1. **Performance ≠ learning.** Answer-giving AI lifts assisted performance but
-   leaves *unaided* performance null-to-negative once removed. Preregistered
-   classroom RCT: bare ChatGPT left students ~17% worse on an unaided exam
-   (−0.054 SD); a hint-only, answer-withholding tutor **erased** the harm
-   (−0.004, n.s.) — but added no gain over no AI.
-   [Bastani et al., *PNAS* 2025](https://www.pnas.org/doi/10.1073/pnas.2422633122).
-   Corroborated by [Fan et al., *BJET* 2025](https://doi.org/10.1111/bjet.13544)
-   ("metacognitive laziness") and
-   [Bassner et al., *Computers & Education: AI* 2026](https://www.sciencedirect.com/science/article/pii/S2666920X25001778).
+The design is built on causal, replicated findings, not viral takes.
 
-2. **Automation bias reaches experts, and training doesn't remove it.** When the
-   AI's suggestion was wrong, even very experienced radiologists collapsed from
-   82.3% → 45.5% accuracy.
-   [Dratsch et al., *Radiology* 2023](https://pubs.rsna.org/doi/10.1148/radiol.222176);
-   [Parasuraman & Manzey, *Human Factors* 2010](https://journals.sagepub.com/doi/10.1177/0018720810376055).
-   - **What reduces it:** cognitive forcing (commit before reveal), and making the
-     AI's error salient and cheap to verify.
-   - **What backfires:** confidence scores and plain explanations — they read as
-     competence signals and *increase* blind trust. **Transparency is not
-     scrutiny.**
+1. **Performance is not learning.** Answer-giving AI raises assisted performance and leaves unaided performance flat or negative once removed. Preregistered classroom RCT: bare ChatGPT left students ~17% worse on an unaided exam (−0.054 SD); a hint-only tutor erased the harm (−0.004, n.s.) but added no gain. [Bastani et al., *PNAS* 2025](https://www.pnas.org/doi/10.1073/pnas.2422633122). Corroborated by [Fan et al., *BJET* 2025](https://doi.org/10.1111/bjet.13544) and [Bassner et al., *Computers & Education: AI* 2026](https://www.sciencedirect.com/science/article/pii/S2666920X25001778).
 
-3. **Withholding helps people with a schema but hurts true novices**
-   (expertise-reversal) → scaffolding must be expertise-adaptive, never blanket.
-   Underpinned by the robust pre-AI mechanisms: retrieval practice (g≈0.51),
-   generation effect (d≈0.40), intelligent tutoring systems (d≈0.43–0.76).
+2. **Automation bias reaches experts.** When the AI was wrong, experienced radiologists dropped from 82.3% to 45.5% accuracy. [Dratsch et al., *Radiology* 2023](https://pubs.rsna.org/doi/10.1148/radiol.222176); [Parasuraman & Manzey, *Human Factors* 2010](https://journals.sagepub.com/doi/10.1177/0018720810376055).
+   - **What reduces it:** cognitive forcing (commit before reveal), and making the error cheap to verify.
+   - **What backfires:** confidence scores and explanations. Both read as competence signals and increase blind trust.
+
+3. **Withholding helps schema-holders and hurts true novices** (expertise reversal). Scaffolding has to adapt to expertise, never blanket. Underpinned by retrieval practice (g≈0.51), generation effect (d≈0.40), and intelligent tutoring systems (d≈0.43 to 0.76).
 
 ---
 
@@ -70,116 +56,20 @@ tax with no payoff.
 
 | File | What it is |
 |---|---|
-| [`cultivation.ts`](./cultivation.ts) | **The product router.** Server-side code for an app's backend: classify each request into a regime and return the matching system prompt before calling the model. Provider-agnostic (OpenRouter-compatible `/chat/completions`). |
-| [`skills/cultivation-mode/SKILL.md`](./skills/cultivation-mode/SKILL.md) | **The behavioral skill.** The same discipline as a portable instruction set — installable as a Claude/Agent Skill, or pasted into any model as a system prompt to change how it talks to *you*. |
-| [`skills/ai-fitness-report/SKILL.md`](./skills/ai-fitness-report/SKILL.md) | **The audit skill.** Drives `audit.ts` end-to-end using in-context classification — no external API, nothing leaves your Claude Code trust boundary. Invoke in a fresh chat: "generate my AI fitness report." |
-| [`audit.ts`](./audit.ts) | **The audit script.** Walks `~/.claude/projects/*.jsonl`, extracts your prompts, and generates the report. Two paths: driven by the audit skill (stays local, uses subscription), or headless via OpenRouter (unattended, uses free tier that trains on data). |
-
-**Two different jobs:** the skill changes how a model talks to *you* in a chat;
-the router changes how *your app's* AI talks to *your users*, automatically.
+| [`skills/cultivation-mode/SKILL.md`](./skills/cultivation-mode/SKILL.md) | **The behavioral skill.** Install this into Claude Code and it changes how Claude talks to you. Also works as a paste-in system prompt in any other model. |
+| [`skills/ai-fitness-report/SKILL.md`](./skills/ai-fitness-report/SKILL.md) | **The report skill.** Install this and say "generate my AI fitness report" in a fresh Claude Code chat. It reads your past sessions and produces an HTML report on how you've been using AI. |
+| [`audit.ts`](./audit.ts) | **The report script.** What the fitness-report skill actually runs. Can also be used headless with an OpenRouter API key. |
+| [`cultivation.ts`](./cultivation.ts) | **The router.** For developers building AI apps. Classifies user requests and returns the right system prompt before you call your model. |
 
 ---
 
-## Using the router
-
-```ts
-import { route } from './cultivation'
-
-const { regime, systemPrompt } = await route(userText, {
-  apiKey: process.env.OPENROUTER_API_KEY!,
-  ctx: { surfaceGoal: 'decide', expertise: 'expert', stakes: 'high' },
-})
-// then send [{ role: 'system', content: systemPrompt }, ...history] to your model
-```
-
-Design notes baked in:
-
-- **Skip the classifier when you can.** If the product surface already knows the
-  goal, pass `ctx.surfaceGoal` and routing is free (no extra LLM call). Reserve
-  the classifier for genuinely open-ended chat.
-- **The escape hatch overrides everything.** "just tell me" forces plain offload,
-  regardless of regime — withholding is only legitimate because the user can opt
-  out instantly.
-- **Fail open.** Any classifier error routes to offload. The failure mode is never
-  "silently withhold."
-
----
-
-## Installing the skill
-
-The skill ships in installable form at
-[`skills/cultivation-mode/SKILL.md`](./skills/cultivation-mode/SKILL.md).
+## Installing the skill (change how Claude talks to you)
 
 ```bash
-# Claude Code — personal (available in every project)
+# personal, works in every project
 mkdir -p ~/.claude/skills/cultivation-mode
 cp skills/cultivation-mode/SKILL.md ~/.claude/skills/cultivation-mode/
 
 # or per-project
 mkdir -p .claude/skills/cultivation-mode
 cp skills/cultivation-mode/SKILL.md .claude/skills/cultivation-mode/
-```
-
-Then invoke it by name (or let it auto-trigger on a relevant request); it stays
-active for the rest of that conversation. In any other tool, paste the body of
-`SKILL.md` (everything below the frontmatter) as a system prompt / custom
-instruction.
-
----
-
-## Running the audit
-
-Two paths — same report either way.
-
-### A) Through Claude Code (recommended — stays local)
-
-Install the audit skill, then invoke it in a fresh Claude Code chat:
-
-```bash
-mkdir -p ~/.claude/skills/ai-fitness-report
-cp skills/ai-fitness-report/SKILL.md ~/.claude/skills/ai-fitness-report/
-```
-
-Then in Claude Code:
-
-> "Generate my AI fitness report."
-
-Claude will `cd` to this repo, extract your prompts, classify them in-context (no external API), write them to the local cache, and generate an HTML report opened in your default browser. Uses your existing Claude Code subscription; nothing leaves your machine → Anthropic trust boundary.
-
-### B) Headless via OpenRouter
-
-Unattended — good for full-archive one-shots, but the default free-tier model trains on your prompts.
-
-```bash
-export OPENROUTER_API_KEY=sk-or-...
-node --experimental-strip-types audit.ts --sample 5 --out ai-fitness-report.html
-node --experimental-strip-types audit.ts --out ai-fitness-report.html    # full archive
-```
-
-Flags: `--sample N`, `--dump` (write prompts file for external classifier), `--report` (regenerate report from cache, no API), `--dry` (heuristics only), `--out PATH` (`.html` for HTML, `.md` for markdown), `--concurrency N`, `--model NAME`.
-
-Classifications are cached in `.ai-fitness-cache.json` so re-runs are free.
-
-### What the report contains
-
-Leads with two evaluative sections — **Impression** (3–5 observations applying specific Tier-A findings to your pattern, each with a confidence tag and a linked citation) and **Moments** (the 10 most-recent skill-building / expert-decision prompts, with the top 2 shown as full before/after cards including a copy-paste "Try instead" reframe). Everything descriptive — regime mix, activity heatmap, session stats, project deep dives, topics, stakes, chronic offload domains, narrative summary — sits below.
-
-**Framing discipline.** The report applies specific findings to your pattern; it does not compare you against a benchmark of "healthy AI use." No such benchmark exists in the evidence. Every observation carries a confidence tag (Strong / Plausible / Speculative) so overclaims are visible.
-
----
-
-## Honest limits (read before shipping)
-
-- **Measure the *unaided* outcome, not the assisted one.** Assisted metrics hide
-  the exact harm this exists to prevent. Instrument later tool-absent performance,
-  or falling assistance-depth over time — and stratify by expertise.
-- **Watch the equity trap.** Cognitive forcing helps high-need-for-cognition users
-  most and may just slow and churn everyone else — the people the learning harm
-  hits hardest. If it only helps the top tier, it's not a safeguard.
-- **Friction fights the market.** A frictionless competitor is one click away, so
-  gate friction to genuinely high-stakes / skill-building moments, never a blanket
-  tax, and keep a frictionless path for offload, accessibility, and time-critical
-  use.
-- **Frame it truthfully.** Harm-avoidance and capture-avoidance — never "makes you
-  better."
-
