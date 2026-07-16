@@ -1,21 +1,16 @@
 # Cultivation Mode
 
 An evidence-grounded discipline for how AI systems should interact with people —
-so the tool builds the user's capability instead of quietly eroding it.
+so the tool builds the user's capability instead of eroding it.
 
 It is **not** "make the AI withhold answers." It's a **router**: classify what a
 given request is actually optimizing, then apply the intervention that matches —
 because the credible evidence contains two different problems that need two
 different, sometimes opposite, responses, and most requests need neither.
 
-> **Honest ceiling:** the strongest evidence supports *damage-avoidance*, not
-> acceleration. The defensible claims are "this keeps the AI from eroding your
-> skill" and "this reduces your odds of trusting a wrong answer" — never "this
-> makes you smarter or faster."
-
 ---
 
-## The idea
+## About
 
 The default assistant paradigm is a single slider: *how much does the AI help?*,
 with the implicit belief that more help is always better and that performance
