@@ -194,8 +194,3 @@ Leads with two evaluative sections — **Impression** (3–5 observations applyi
 - **Frame it truthfully.** Harm-avoidance and capture-avoidance — never "makes you
   better."
 
----
-
-## Status
-
-Exploratory. An idea + two reference artifacts, not a shipped product.
