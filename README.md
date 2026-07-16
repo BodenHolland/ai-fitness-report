@@ -41,7 +41,7 @@ tax with no payoff.
 
 ---
 
-## The evidence (Tier A — the most credible, causal findings)
+## Research
 
 1. **Performance ≠ learning.** Answer-giving AI lifts assisted performance but
    leaves *unaided* performance null-to-negative once removed. Preregistered
@@ -69,13 +69,7 @@ tax with no payoff.
    Underpinned by the robust pre-AI mechanisms: retrieval practice (g≈0.51),
    generation effect (d≈0.40), intelligent tutoring systems (d≈0.43–0.76).
 
-**Explicitly weaker / not relied on here:** viral "55% brain connectivity" and
-"critical-thinking collapse" claims rest on a non-peer-reviewed EEG preprint and
-cross-sectional self-report surveys; the clinical "de-skilling" signal is a single
-confounded observational study. This project builds only on the causal, replicated
-findings above.
 
----
 
 ## What's in this repo
 
