@@ -69,7 +69,7 @@ tax with no payoff.
    Underpinned by the robust pre-AI mechanisms: retrieval practice (g≈0.51),
    generation effect (d≈0.40), intelligent tutoring systems (d≈0.43–0.76).
 
-
+---
 
 ## What's in this repo
 
